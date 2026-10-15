@@ -8,6 +8,7 @@
 #     ctest --test-dir build --output-on-failure
 #
 #  Opções:
+#     EPN_BUILD_CLI    compila a ferramenta de linha de comando (padrão: ON)
 #     EPN_BUILD_TESTS  compila os testes unitários (GTest)     (padrão: ON)
 # =============================================================================
 cmake_minimum_required(VERSION 3.21)
@@ -25,6 +26,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Tipo de build" FORCE)
 endif()
 
+option(EPN_BUILD_CLI   "Compila a ferramenta de linha de comando" ON)
 option(EPN_BUILD_TESTS "Compila os testes unitários (GTest)"      ON)
 
 # Código compartilhado com o firmware: cabeçalho do protocolo e o
@@ -42,6 +44,10 @@ function(epn_set_warnings target)
 endfunction()
 
 add_subdirectory(core)
+
+if(EPN_BUILD_CLI)
+    add_subdirectory(cli)
+endif()
 
 if(EPN_BUILD_TESTS)
     enable_testing()
