@@ -1,0 +1,20 @@
+# --- Firmware (PlatformIO) ---
+firmware/.pio/
+firmware/.vscode/
+
+# --- Software (CMake) ---
+build/
+build-*/
+software/build/
+CMakeUserPresets.json
+
+# --- KiCad: arquivos temporários e de backup ---
+hardware/*-backups/
+hardware/*.lck
+hardware/fp-info-cache
+hardware/*.kicad_prl
+
+# --- Diversos ---
+*.swp
+.DS_Store
+__pycache__/
