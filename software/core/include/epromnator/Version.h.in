@@ -1,0 +1,11 @@
+// =============================================================================
+//  Version.h — gerado pelo CMake a partir de Version.h.in (não editar)
+// =============================================================================
+#pragma once
+
+namespace epn {
+
+inline constexpr const char* kAppName = "EPROMnator";
+inline constexpr const char* kAppVersion = "@PROJECT_VERSION@";
+
+}  // namespace epn
