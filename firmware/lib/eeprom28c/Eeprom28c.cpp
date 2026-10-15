@@ -18,11 +18,20 @@ namespace {
 // usamos 15 ms de limite para ter margem).
 Config current = {32768UL, 64, 15, false};
 
-// Endereços "mágicos" das sequências SDP. Valem para toda a família: no
-// 28C64 as linhas A13/A14 não existem e os endereços se reduzem a 1555/0AAA,
-// o que acontece naturalmente porque esses pinos não estão ligados no chip.
+// Endereços "mágicos" das sequências SDP (valores do 28C256).
 constexpr uint16_t SDP_ADDR_1 = 0x5555;
 constexpr uint16_t SDP_ADDR_2 = 0x2AAA;
+
+// Máscara de endereço do chip configurado (ex.: 0x7FFF no 28C256, 0x1FFF no
+// 28C64). Aplicada aos endereços SDP: no 28C64 eles viram 1555/0AAA.
+//
+// Isso é IMPORTANTE no 28C64: o pino 1 dele é RDY/~BUSY (saída open-drain)
+// e, nesta placa, está ligado à linha A14 do 74HC595. Usando 0x5555 o 595
+// colocaria A14 em nível alto enquanto o chip puxa o pino para baixo
+// (conflito elétrico). Com a máscara, A13/A14 ficam sempre em nível baixo.
+inline uint16_t addressMask() {
+    return (uint16_t)(current.size - 1);
+}
 
 // ---------------------------------------------------------------------------
 //  Primitivas internas de escrita
@@ -56,9 +65,10 @@ inline void loadByte(uint16_t address, uint8_t value) {
 // Sequência de 3 bytes que precede uma escrita quando o SDP está ativo
 // (e que, sozinha, também habilita o SDP).
 inline void loadSdpUnlock() {
-    loadByte(SDP_ADDR_1, 0xAA);
-    loadByte(SDP_ADDR_2, 0x55);
-    loadByte(SDP_ADDR_1, 0xA0);
+    const uint16_t mask = addressMask();
+    loadByte(SDP_ADDR_1 & mask, 0xAA);
+    loadByte(SDP_ADDR_2 & mask, 0x55);
+    loadByte(SDP_ADDR_1 & mask, 0xA0);
 }
 
 // Aguarda o fim do ciclo de gravação usando "data polling": enquanto a
@@ -245,21 +255,26 @@ void sdpEnable() {
         loadSdpUnlock();
         endWrite();
     }
-    // A sequência inicia um ciclo interno; aguardamos o tWC máximo.
+    // A sequência inicia um ciclo interno; aguardamos o tWC máximo com o
+    // endereço em 0 (todas as linhas altas desligadas).
+    Bus::setAddress(0);
     delay(current.writeTimeoutMs);
 }
 
 void sdpDisable() {
+    const uint16_t a1 = SDP_ADDR_1 & addressMask();
+    const uint16_t a2 = SDP_ADDR_2 & addressMask();
     ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
         beginWrite();
-        loadByte(SDP_ADDR_1, 0xAA);
-        loadByte(SDP_ADDR_2, 0x55);
-        loadByte(SDP_ADDR_1, 0x80);
-        loadByte(SDP_ADDR_1, 0xAA);
-        loadByte(SDP_ADDR_2, 0x55);
-        loadByte(SDP_ADDR_1, 0x20);
+        loadByte(a1, 0xAA);
+        loadByte(a2, 0x55);
+        loadByte(a1, 0x80);
+        loadByte(a1, 0xAA);
+        loadByte(a2, 0x55);
+        loadByte(a1, 0x20);
         endWrite();
     }
+    Bus::setAddress(0);
     delay(current.writeTimeoutMs);
 }
 
