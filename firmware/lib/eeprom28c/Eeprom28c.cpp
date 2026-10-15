@@ -57,6 +57,9 @@ inline void endWrite() {
 inline void loadByte(uint16_t address, uint8_t value) {
     Bus::setAddress(address);
     Bus::writeData(value);
+    // O dado precisa estar estável na borda de subida de ~WE (ver
+    // Bus::settleDelay sobre as linhas lentas da montagem).
+    Bus::settleDelay();
     Bus::weLow();
     Bus::writePulseDelay();
     Bus::weHigh();

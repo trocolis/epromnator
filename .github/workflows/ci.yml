@@ -43,7 +43,7 @@ jobs:
 
       - name: Compilar firmware
         working-directory: firmware
-        run: pio run -e nano -e nano_old -e nano_debug
+        run: pio run -e nano -e nano_old -e nano_debug -e nano_old_debug
 
       - name: Testes nativos
         working-directory: firmware

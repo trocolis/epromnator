@@ -45,6 +45,15 @@ Mapa de pinos (conferido na netlist):
 Correções já aplicadas ao esquema: LED D1 estava invertido; C3 recebeu valor
 (10 µF).
 
+> ⚠️ **Resistores série das linhas de dados (R3–R10).** No primeiro teste com a
+> placa montada, as linhas de dados levaram microssegundos para assentar (D4/D5,
+> R7/R8, as piores). A leitura devolvia o dado do endereço anterior e a escrita
+> travava bits errados. O firmware compensa com 15 µs de assentamento
+> (`Bus::SETTLE_CYCLES`), mas confira se os resistores são mesmo de **220 Ω**
+> (vermelho-vermelho-marrom), não de 22 kΩ (vermelho-vermelho-laranja). Depois
+> de corrigidos, o tempo pode voltar a ~1 µs, o que deixa a leitura cerca de
+> 0,5 s mais rápida.
+
 ---
 
 ## Firmware
@@ -54,7 +63,7 @@ Requer [PlatformIO](https://platformio.org/).
 ```sh
 cd firmware
 pio run -e nano -t upload          # Nano com bootloader novo
-pio run -e nano_old -t upload      # clones com bootloader antigo
+pio run -e nano_old -t upload      # clones com bootloader antigo (57600)
 pio test -e native                 # testes unitários no PC
 ```
 
@@ -65,6 +74,7 @@ multímetro antes de usar o software:
 
 ```sh
 pio run -e nano_debug -t upload && pio device monitor
+# (nano_old_debug para clones com bootloader antigo)
 ```
 
 | Comando           | Função                                             |
@@ -75,6 +85,7 @@ pio run -e nano_debug -t upload && pio device monitor
 | `w <end> <b0>...` | grava bytes                                        |
 | `b` / `c` / `e`   | verifica vazio / CRC32 / apaga o chip              |
 | `s 0` / `s 1`     | desabilita / habilita SDP                          |
+| `v [end]`         | mede o VCC (e o mínimo durante a regravação da página) |
 | `t !`             | **autoteste destrutivo**: grava e confere o chip inteiro |
 
 ### Teste rápido pelo protocolo binário
@@ -198,6 +209,17 @@ blocos que divergem são lidos byte a byte.
 ---
 
 ## Testes e CI
+
+Validado em hardware (Nano clone CH340, bootloader antigo, AT28C256):
+
+- 32 KB gravados em 10,4 s, lidos em 3,5 s, com 0 erros e CRC32 conferido
+  (`tools/fw_smoke_test.py --destructive`);
+- AUTO completo com dados aleatórios em 17 s; detecção de diferença de 1 bit
+  no endereço exato;
+- SDP: com a proteção ativa, a escrita comum é bloqueada e a protegida passa;
+  depois de desabilitada, a escrita comum volta a funcionar.
+
+Testes automatizados:
 
 - `firmware/test`: 11 testes Unity (framing e CRC), com `pio test -e native`;
 - `software/tests`: 46 testes GTest (formatos de arquivo, protocolo e operações

@@ -15,6 +15,9 @@
 //    c                     calcula o CRC32 do chip inteiro
 //    e                     apaga o chip inteiro (preenche com 0xFF)
 //    s <0|1>               desabilita (0) ou habilita (1) o SDP
+//    v [end]               mede a alimentação (VCC); com <end>, mede também o
+//                          mínimo durante um ciclo de gravação, regravando o
+//                          próprio conteúdo da página (não destrutivo)
 //    t !                   AUTOTESTE DESTRUTIVO: grava um padrão no chip
 //                          inteiro, relê e informa erros e tempos
 // =============================================================================
@@ -69,6 +72,7 @@ void printHelp() {
     Serial.println(F("  c                     CRC32 do chip inteiro"));
     Serial.println(F("  e                     apaga o chip inteiro"));
     Serial.println(F("  s <0|1>               desabilita/habilita SDP"));
+    Serial.println(F("  v [end]               mede VCC (e o minimo durante uma gravacao)"));
     Serial.println(F("  t !                   autoteste DESTRUTIVO do chip inteiro"));
 }
 
@@ -90,6 +94,56 @@ void printResult(Eeprom::Result result, uint16_t failAddress) {
     }
     printHex16(failAddress);
     Serial.println();
+}
+
+bool nextHex(char*& cursor, uint32_t& out);  // definida mais abaixo
+
+// Mede a tensão de alimentação em milivolts. O ADC converte a referência
+// interna de 1,1 V (bandgap) usando AVcc como referência: quanto menor o
+// VCC, maior a leitura. Precisão de ~10% (tolerância do bandgap).
+uint16_t readVccMillivolts() {
+    ADMUX = _BV(REFS0) | 0x0E;      // referência AVcc, entrada = bandgap 1,1 V
+    ADCSRA |= _BV(ADEN);
+    ADCSRA |= _BV(ADSC);
+    while (ADCSRA & _BV(ADSC)) {}
+    const uint16_t raw = ADC;
+    return raw ? (uint16_t)(1125300UL / raw) : 0;  // 1,1 V * 1023 * 1000
+}
+
+// Comando "v": VCC em repouso e, opcionalmente, o mínimo durante a
+// gravação de uma página (regravando o mesmo conteúdo).
+void commandVcc(char* args) {
+    // Primeira leitura após trocar o multiplexador é descartada (o
+    // capacitor de amostragem precisa estabilizar no bandgap).
+    readVccMillivolts();
+    delay(5);
+    Serial.print(F("VCC em repouso: "));
+    Serial.print(readVccMillivolts());
+    Serial.println(F(" mV"));
+
+    uint32_t address = 0;
+    if (!nextHex(args, address)) return;
+
+    // Lê a página e a regrava idêntica: provoca um ciclo de gravação real
+    // (o chip apaga e programa as células) sem alterar o conteúdo.
+    const uint8_t page = Eeprom::config().pageSize > 1 ? Eeprom::config().pageSize : 1;
+    address -= address % page;
+    uint8_t buffer[Eeprom::MAX_PAGE_SIZE];
+    Eeprom::readBlock((uint16_t)address, buffer, page);
+
+    // Amostra o VCC continuamente por 12 ms logo após a gravação.
+    uint16_t failAddress = 0;
+    uint16_t minimum = 0xFFFF;
+    const Eeprom::Result r = Eeprom::write((uint16_t)address, buffer, page, &failAddress);
+    const uint32_t start = millis();
+    while (millis() - start < 12) {
+        const uint16_t mv = readVccMillivolts();
+        if (mv < minimum) minimum = mv;
+    }
+    Serial.print(F("VCC minimo apos gravar a pagina: "));
+    Serial.print(minimum);
+    Serial.println(F(" mV"));
+    printResult(r, failAddress);
 }
 
 // Padrão usado pelo autoteste: depende dos dois bytes do endereço, para que
@@ -324,6 +378,10 @@ void execute() {
 
         case 't':
             commandSelfTest(args);
+            break;
+
+        case 'v':
+            commandVcc(args);
             break;
 
         default:

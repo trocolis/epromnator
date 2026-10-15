@@ -83,17 +83,29 @@ void setAddress(uint16_t address);
 // Atraso de ~62,5 ns (1 ciclo a 16 MHz) por NOP.
 BUS_INLINE void nop() { __asm__ __volatile__("nop"); }
 
-// Atraso para cobrir o tempo de acesso de leitura da EEPROM (tACC/tOE, até
-// 150 ns no 28C256-15) somado ao atraso RC dos resistores série de 220R.
-// 6 NOPs ≈ 375 ns, com margem confortável.
-BUS_INLINE void accessDelay() {
-    nop(); nop(); nop(); nop(); nop(); nop();
-}
+// Tempo de assentamento do barramento de dados, usado ANTES de ler (após
+// trocar o endereço) e ANTES do pulso de ~WE (após colocar o dado).
+//
+// Pelo datasheet bastariam ~150 ns (tACC do 28C256-15). Porém, no teste com
+// a placa real, as linhas de dados levaram vários microssegundos para
+// assentar (D4/D5 — resistores R7/R8 — eram as piores): com 375 ns a
+// leitura devolvia o valor do endereço ANTERIOR, que ficava "preso" na
+// capacitância da linha, e a escrita travava bits errados. A varredura
+// mostrou falhas com 1 µs e 3 µs e leitura perfeita com 10 µs. Usamos 15 µs
+// de margem: custa ~0,5 s numa leitura de 32 KB e ainda cabe com folga no
+// limite de 150 µs entre bytes da escrita em página.
+//
+// Se os resistores série (R3..R10) forem conferidos/corrigidos para 220R,
+// este valor pode voltar a ~1 µs.
+constexpr uint16_t SETTLE_CYCLES = 240;  // 15 µs a 16 MHz
 
-// Largura mínima do pulso de ~WE (tWP ≥ 100 ns). 3 NOPs ≈ 190 ns.
-BUS_INLINE void writePulseDelay() {
-    nop(); nop(); nop();
-}
+BUS_INLINE void settleDelay() { __builtin_avr_delay_cycles(SETTLE_CYCLES); }
+
+// Mantido por compatibilidade: leitura usa o mesmo assentamento.
+BUS_INLINE void accessDelay() { settleDelay(); }
+
+// Largura do pulso de ~WE (tWP ≥ 100 ns). ~0,5 µs, com folga.
+BUS_INLINE void writePulseDelay() { __builtin_avr_delay_cycles(8); }
 
 // ---------------------------------------------------------------------------
 //  Barramento de dados
