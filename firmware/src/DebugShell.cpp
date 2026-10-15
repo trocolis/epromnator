@@ -20,6 +20,9 @@
 // =============================================================================
 #include "DebugShell.h"
 
+// Compilado apenas no modo shell de depuração (env:nano_debug).
+#ifdef EPN_DEBUG_SHELL
+
 #include <Arduino.h>
 #include <stdlib.h>
 #include <string.h>
@@ -366,3 +369,5 @@ void poll() {
 }
 
 }  // namespace DebugShell
+
+#endif  // EPN_DEBUG_SHELL

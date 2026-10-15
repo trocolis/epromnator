@@ -8,6 +8,7 @@
 #include <util/atomic.h>
 
 #include "Bus.h"
+#include "epromnator_protocol.h"
 
 namespace Eeprom {
 
@@ -290,9 +291,9 @@ bool isBlank(uint16_t address, uint32_t count, uint16_t* firstUsed,
 }
 
 uint32_t crc32(uint16_t address, uint32_t count) {
-    // CRC32 bit a bit (sem tabela, para economizar 1 KB de flash/RAM).
-    // Polinômio refletido 0xEDB88320, valor inicial e XOR final 0xFFFFFFFF.
-    uint32_t crc = 0xFFFFFFFFUL;
+    // CRC32 bit a bit (sem tabela, para economizar 1 KB de flash/RAM),
+    // usando as mesmas funções do protocolo que o software do PC usa.
+    uint32_t crc = EPN_CRC32_INIT;
 
     Bus::dataAsInput();
     Bus::ceLow();
@@ -300,14 +301,11 @@ uint32_t crc32(uint16_t address, uint32_t count) {
     for (uint32_t i = 0; i < count; ++i) {
         Bus::setAddress((uint16_t)(address + i));
         Bus::accessDelay();
-        crc ^= Bus::readData();
-        for (uint8_t bit = 0; bit < 8; ++bit) {
-            crc = (crc >> 1) ^ (0xEDB88320UL & (0UL - (crc & 1UL)));
-        }
+        crc = epn_crc32_update(crc, Bus::readData());
     }
     Bus::oeHigh();
     Bus::ceHigh();
-    return ~crc;
+    return epn_crc32_final(crc);
 }
 
 }  // namespace Eeprom
