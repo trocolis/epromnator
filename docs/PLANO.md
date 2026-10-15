@@ -25,18 +25,20 @@ Endereço de 16 bits deslocado **MSB primeiro** (A15 → A0).
 
 ## Etapas
 
-| # | Etapa                                         | Critério de aceite                         |
-|---|-----------------------------------------------|--------------------------------------------|
-| 0 | Estrutura do repositório + plano              | repositório organizado                     |
-| 1 | Revisão do hardware                           | LED corrigido, C3 com valor definido       |
-| 2 | HAL do firmware + shell de depuração texto    | ler/gravar 1 byte pelo monitor serial      |
-| 3 | Driver 28C256 (página + polling + SDP)        | gravar e ler 32 KB sem erro                |
-| 4 | Protocolo binário + testes nativos            | `pio test -e native` + script Python       |
-| 5 | Core C++ + formatos de arquivo + emulador     | testes unitários passando                  |
-| 6 | CLI                                           | ler/gravar/verificar/apagar                |
-| 7 | GUI Qt 6                                      | todas as operações com progresso e log     |
-| 8 | Recursos avançados (AUTO, pular 0xFF, diff)   | incorporados nas etapas 5–7                |
-| 9 | CI + empacotamento + README                   | build Linux/Windows/macOS                  |
+| # | Etapa                                         | Critério de aceite                         | Status |
+|---|-----------------------------------------------|--------------------------------------------|--------|
+| 0 | Estrutura do repositório + plano              | repositório organizado                     | ✅ |
+| 1 | Revisão do hardware                           | LED corrigido, C3 com valor definido       | ✅ (netlist conferida) |
+| 2 | HAL do firmware + shell de depuração texto    | ler/gravar 1 byte pelo monitor serial      | ✅ compila · ⏳ teste na placa |
+| 3 | Driver 28C256 (página + polling + SDP)        | gravar e ler 32 KB sem erro (`t !`)        | ✅ compila · ⏳ teste na placa |
+| 4 | Protocolo binário + testes nativos            | `pio test -e native` + script Python       | ✅ 11 testes · ⏳ script na placa |
+| 5 | Core C++ + formatos de arquivo + emulador     | testes unitários passando                  | ✅ 46 testes |
+| 6 | CLI                                           | ler/gravar/verificar/apagar                | ✅ (emulador) |
+| 7 | GUI Qt 6                                      | todas as operações com progresso e log     | ✅ (emulador) |
+| 8 | Recursos avançados (AUTO, pular 0xFF, diff)   | incorporados nas etapas 5–7                | ✅ |
+| 9 | CI + empacotamento + README                   | build Linux/Windows/macOS                  | ✅ local · ⏳ CI no GitHub |
+
+⏳ = depende da placa montada ou de um repositório no GitHub.
 
 ## Decisões tomadas
 
@@ -49,3 +51,6 @@ Endereço de 16 bits deslocado **MSB primeiro** (A15 → A0).
   GUI e testes unitários sem a placa.
 - **Protocolo binário stop-and-wait** com CRC16-CCITT e número de sequência;
   ver `protocol/epromnator_protocol.h`.
+- **Endereços SDP mascarados pelo tamanho do chip**: no 28C64 o pino 1 é
+  RDY/~BUSY e está ligado à linha A14 do 595; as sequências usam 1555/0AAA
+  para não provocar conflito elétrico.

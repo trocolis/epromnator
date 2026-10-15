@@ -14,6 +14,8 @@ if(NOT GTest_FOUND)
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
     # No Windows, usa o mesmo runtime (/MD) do restante do projeto.
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # Não instala o GTest junto com o programa (cmake --install / AppImage).
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 endif()
 

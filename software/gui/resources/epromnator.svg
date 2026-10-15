@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ícone do EPROMnator: chip DIP de 28 pinos com uma seta de gravação. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <!-- Pinos (7 de cada lado, representando o encapsulamento DIP) -->
+  <g fill="#9aa3ad">
+    <rect x="40" y="44" width="28" height="12" rx="2"/>
+    <rect x="40" y="70" width="28" height="12" rx="2"/>
+    <rect x="40" y="96" width="28" height="12" rx="2"/>
+    <rect x="40" y="122" width="28" height="12" rx="2"/>
+    <rect x="40" y="148" width="28" height="12" rx="2"/>
+    <rect x="40" y="174" width="28" height="12" rx="2"/>
+    <rect x="40" y="200" width="28" height="12" rx="2"/>
+    <rect x="188" y="44" width="28" height="12" rx="2"/>
+    <rect x="188" y="70" width="28" height="12" rx="2"/>
+    <rect x="188" y="96" width="28" height="12" rx="2"/>
+    <rect x="188" y="122" width="28" height="12" rx="2"/>
+    <rect x="188" y="148" width="28" height="12" rx="2"/>
+    <rect x="188" y="174" width="28" height="12" rx="2"/>
+    <rect x="188" y="200" width="28" height="12" rx="2"/>
+  </g>
+  <!-- Corpo do chip -->
+  <rect x="60" y="28" width="136" height="200" rx="10" fill="#2b2f36"/>
+  <!-- Entalhe de orientação (pino 1) -->
+  <path d="M112 28 a16 16 0 0 0 32 0 z" fill="#14171b"/>
+  <!-- Seta de gravação -->
+  <path d="M128 72 l36 44 h-22 v52 h-28 v-52 h-22 z" fill="#4fb3ff"/>
+  <rect x="96" y="184" width="64" height="12" rx="3" fill="#4fb3ff"/>
+</svg>

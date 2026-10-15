@@ -6,6 +6,7 @@
 //  Um arquivo passado na linha de comando é aberto no buffer.
 // =============================================================================
 #include <QApplication>
+#include <QIcon>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QTranslator>
@@ -20,6 +21,7 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationName(QStringLiteral("EPROMnator"));
     QApplication::setApplicationName(QStringLiteral("EPROMnator"));
     QApplication::setApplicationVersion(QString::fromLatin1(epn::kAppVersion));
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/epromnator.svg")));
 
     // Traduções dos textos internos do Qt (diálogos de arquivo, menus de
     // contexto...), quando o pacote de traduções está instalado no sistema.

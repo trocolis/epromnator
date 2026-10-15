@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=EPROMnator
+GenericName=Gravador de EEPROM
+Comment=Gravador de EEPROMs paralelas 28Cxxx baseado em Arduino Nano
+Exec=epromnator-gui %f
+Icon=epromnator
+Terminal=false
+Categories=Development;Electronics;
+MimeType=application/octet-stream;text/x-hex;

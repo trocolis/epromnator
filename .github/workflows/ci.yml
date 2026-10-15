@@ -1,0 +1,148 @@
+# =============================================================================
+#  CI do EPROMnator
+# =============================================================================
+#
+#  * firmware: compila os ambientes AVR e roda os testes nativos (Unity);
+#  * software: compila core/CLI/GUI e roda os testes (GTest) em Linux,
+#    Windows e macOS, gerando pacotes:
+#      - Linux:   AppImage (linuxdeploy + plugin Qt)
+#      - Windows: .zip com windeployqt
+#      - macOS:   .dmg com macdeployqt
+#  * release: em tags "v*", publica os artefatos em um GitHub Release.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  firmware:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache do PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Instalar PlatformIO
+        run: pip install platformio
+
+      - name: Compilar firmware
+        working-directory: firmware
+        run: pio run -e nano -e nano_old -e nano_debug
+
+      - name: Testes nativos
+        working-directory: firmware
+        run: pio test -e native
+
+      - name: Coletar binários
+        run: |
+          mkdir -p dist
+          cp firmware/.pio/build/nano/firmware.hex       dist/epromnator-firmware-nano.hex
+          cp firmware/.pio/build/nano_old/firmware.hex   dist/epromnator-firmware-nano-old-bootloader.hex
+          cp firmware/.pio/build/nano_debug/firmware.hex dist/epromnator-firmware-debug-shell.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: dist/*.hex
+
+  # ---------------------------------------------------------------------------
+  software:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          cache: true
+
+      - name: Configurar
+        run: cmake -S software -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Compilar
+        run: cmake --build build --config Release --parallel
+
+      - name: Testes
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      # --- Empacotamento ------------------------------------------------------
+      - name: Pacote Linux (AppImage)
+        if: runner.os == 'Linux'
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"   # dispensa FUSE no runner
+          EXTRA_QT_MODULES: svg           # plugin de imagem SVG (ícone)
+        run: |
+          cmake --install build --prefix AppDir/usr
+          base=https://github.com/linuxdeploy
+          wget -q $base/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q $base/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+          export QMAKE="$(command -v qmake6 || command -v qmake)"
+          ./linuxdeploy-x86_64.AppImage --appdir AppDir --plugin qt --output appimage \
+            --desktop-file packaging/linux/epromnator.desktop \
+            --icon-file software/gui/resources/epromnator.svg
+          mkdir -p dist && mv EPROMnator*.AppImage dist/
+
+      - name: Pacote Windows (zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/EPROMnator | Out-Null
+          Copy-Item build/gui/Release/epromnator-gui.exe dist/EPROMnator/
+          Copy-Item build/cli/Release/epromnator-cli.exe dist/EPROMnator/
+          windeployqt --release --no-compiler-runtime dist/EPROMnator/epromnator-gui.exe
+          Compress-Archive -Path dist/EPROMnator -DestinationPath dist/EPROMnator-windows.zip
+
+      - name: Pacote macOS (dmg)
+        if: runner.os == 'macOS'
+        run: |
+          cp build/cli/epromnator-cli build/gui/epromnator-gui.app/Contents/MacOS/
+          macdeployqt build/gui/epromnator-gui.app -dmg
+          mkdir -p dist && mv build/gui/epromnator-gui.dmg dist/EPROMnator-macos.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: software-${{ runner.os }}
+          path: |
+            dist/*.AppImage
+            dist/*.zip
+            dist/*.dmg
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [firmware, software]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
