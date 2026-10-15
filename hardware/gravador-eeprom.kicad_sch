@@ -5422,7 +5422,7 @@
 	)
 	(symbol
 		(lib_id "Device:LED")
-		(at 162.56 137.16 270)
+		(at 162.56 137.16 90)
 		(unit 1)
 		(body_style 1)
 		(exclude_from_sim no)
@@ -6979,7 +6979,7 @@
 				)
 			)
 		)
-		(property "Value" "C"
+		(property "Value" "10uF"
 			(at 139.7 66.04 90)
 			(show_name no)
 			(do_not_autoplace no)
