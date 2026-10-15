@@ -9,6 +9,7 @@
 #
 #  Opções:
 #     EPN_BUILD_CLI    compila a ferramenta de linha de comando (padrão: ON)
+#     EPN_BUILD_GUI    compila a interface gráfica Qt 6        (padrão: ON)
 #     EPN_BUILD_TESTS  compila os testes unitários (GTest)     (padrão: ON)
 # =============================================================================
 cmake_minimum_required(VERSION 3.21)
@@ -27,6 +28,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(EPN_BUILD_CLI   "Compila a ferramenta de linha de comando" ON)
+option(EPN_BUILD_GUI   "Compila a interface gráfica (Qt 6)"       ON)
 option(EPN_BUILD_TESTS "Compila os testes unitários (GTest)"      ON)
 
 # Código compartilhado com o firmware: cabeçalho do protocolo e o
@@ -47,6 +49,10 @@ add_subdirectory(core)
 
 if(EPN_BUILD_CLI)
     add_subdirectory(cli)
+endif()
+
+if(EPN_BUILD_GUI)
+    add_subdirectory(gui)
 endif()
 
 if(EPN_BUILD_TESTS)
