@@ -19,7 +19,7 @@ on:
   pull_request:
 
 env:
-  QT_VERSION: "6.8.3"
+  QT_VERSION: "6.9.3"   # 6.9.2+: não liga mais o framework AGL, removido do SDK do macOS
 
 jobs:
   # ---------------------------------------------------------------------------
