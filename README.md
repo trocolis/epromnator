@@ -45,14 +45,14 @@ Mapa de pinos (conferido na netlist):
 Correções já aplicadas ao esquema: LED D1 estava invertido; C3 recebeu valor
 (10 µF).
 
-> ⚠️ **Resistores série das linhas de dados (R3–R10).** No primeiro teste com a
-> placa montada, as linhas de dados levaram microssegundos para assentar (D4/D5,
-> R7/R8, as piores). A leitura devolvia o dado do endereço anterior e a escrita
-> travava bits errados. O firmware compensa com 15 µs de assentamento
-> (`Bus::SETTLE_CYCLES`), mas confira se os resistores são mesmo de **220 Ω**
-> (vermelho-vermelho-marrom), não de 22 kΩ (vermelho-vermelho-laranja). Depois
-> de corrigidos, o tempo pode voltar a ~1 µs, o que deixa a leitura cerca de
-> 0,5 s mais rápida.
+> ⚠️ **Resistores série das linhas de dados (R3–R10).** Confira se são mesmo de
+> **220 Ω** (vermelho-vermelho-marrom), não de 22 kΩ (vermelho-vermelho-laranja).
+> Na primeira montagem, com o valor errado, as linhas de dados levavam
+> microssegundos para assentar: a leitura devolvia o dado do endereço anterior
+> e a escrita travava bits errados. O firmware usa 1 µs de assentamento
+> (`Bus::SETTLE_CYCLES`), validado com os 220 Ω corretos. Se a sua placa
+> apresentar esses sintomas, aumente o valor (com os resistores errados foram
+> necessários 15 µs).
 
 ---
 

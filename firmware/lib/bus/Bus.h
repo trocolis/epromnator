@@ -86,18 +86,21 @@ BUS_INLINE void nop() { __asm__ __volatile__("nop"); }
 // Tempo de assentamento do barramento de dados, usado ANTES de ler (após
 // trocar o endereço) e ANTES do pulso de ~WE (após colocar o dado).
 //
-// Pelo datasheet bastariam ~150 ns (tACC do 28C256-15). Porém, no teste com
-// a placa real, as linhas de dados levaram vários microssegundos para
-// assentar (D4/D5 — resistores R7/R8 — eram as piores): com 375 ns a
-// leitura devolvia o valor do endereço ANTERIOR, que ficava "preso" na
-// capacitância da linha, e a escrita travava bits errados. A varredura
-// mostrou falhas com 1 µs e 3 µs e leitura perfeita com 10 µs. Usamos 15 µs
-// de margem: custa ~0,5 s numa leitura de 32 KB e ainda cabe com folga no
-// limite de 150 µs entre bytes da escrita em página.
+// Pelo datasheet bastariam ~150 ns (tACC do 28C256-15). Na primeira
+// montagem, com resistores série (R3..R10) de valor errado, as linhas de
+// dados levavam microssegundos para assentar e foram necessários 15 µs.
+// Com os resistores corrigidos para 220R, a varredura (chip inteiro com
+// 00/FF alternado, 55/AA alternado e dados aleatórios, cada um lido duas
+// vezes) deu 0 erros com 2, 4, 8 e 16 ciclos; com 1 ciclo a leitura ainda
+// passa, mas a conferência da escrita falha em todas as páginas. Usamos
+// 1 µs, 8x o mínimo medido: na leitura de 32 KB custa só ~30 ms a mais.
 //
-// Se os resistores série (R3..R10) forem conferidos/corrigidos para 220R,
-// este valor pode voltar a ~1 µs.
-constexpr uint16_t SETTLE_CYCLES = 240;  // 15 µs a 16 MHz
+// Pode ser sobrescrito na compilação para repetir a varredura, ex.:
+//   PLATFORMIO_BUILD_FLAGS=-DEPN_SETTLE_CYCLES=4 pio run -e nano -t upload
+#ifndef EPN_SETTLE_CYCLES
+#define EPN_SETTLE_CYCLES 16  // 1 µs a 16 MHz
+#endif
+constexpr uint16_t SETTLE_CYCLES = EPN_SETTLE_CYCLES;
 
 BUS_INLINE void settleDelay() { __builtin_avr_delay_cycles(SETTLE_CYCLES); }
 

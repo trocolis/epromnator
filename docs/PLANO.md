@@ -54,6 +54,7 @@ Endereço de 16 bits deslocado **MSB primeiro** (A15 → A0).
 - **Endereços SDP mascarados pelo tamanho do chip**: no 28C64 o pino 1 é
   RDY/~BUSY e está ligado à linha A14 do 595; as sequências usam 1555/0AAA
   para não provocar conflito elétrico.
-- **Tempo de assentamento do barramento de dados (15 µs)**: medido na placa
-  real; as linhas de dados são lentas (provável resistor série de valor
-  errado). Ver README, seção Hardware.
+- **Tempo de assentamento do barramento de dados (1 µs)**: na primeira
+  montagem foram necessários 15 µs, por causa de resistores série de valor
+  errado. Com os 220R corrigidos, a varredura na placa real passou com
+  125 ns; 1 µs dá 8x de margem. Ver `Bus::SETTLE_CYCLES`.
