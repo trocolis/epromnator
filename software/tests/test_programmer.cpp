@@ -8,6 +8,7 @@
 #include "epromnator/Emulator.h"
 #include "epromnator/Error.h"
 #include "epromnator/Programmer.h"
+#include "epromnator_protocol.h"
 
 using namespace epn;
 
@@ -142,4 +143,26 @@ TEST_F(ProgrammerTest, LogsAreEmitted) {
     programmer->blankCheck();
     ASSERT_FALSE(messages.empty());
     EXPECT_NE(messages.back().find("vazio"), std::string::npos);
+}
+
+TEST_F(ProgrammerTest, IdentifySuggestsDeviceWithoutChangingSelection) {
+    emu->setChipType(ChipType::Sram);
+    const Identification id = programmer->identify();
+    EXPECT_EQ(id.chip.kind, EPN_CHIP_SRAM);
+    ASSERT_NE(id.suggestion, nullptr);
+    EXPECT_EQ(id.suggestion->type, ChipType::Sram);
+    EXPECT_EQ(programmer->device().name, "AT28C256");
+}
+
+TEST_F(ProgrammerTest, SramRefusesSdp) {
+    programmer->selectDevice(*findDevice("62256 (SRAM)"));
+    EXPECT_THROW(programmer->setSdp(true), Error);
+    EXPECT_FALSE(emu->sdpEnabled());
+}
+
+TEST(DescribeChip, FormatsKindSizeAndWriteTime) {
+    EXPECT_EQ(describeChip({EPN_CHIP_SRAM, 32768, 0}), "SRAM de 32 KB");
+    EXPECT_EQ(describeChip({EPN_CHIP_EEPROM, 65536, 3100}),
+              "EEPROM de 64 KB (ciclo de gravação de 3.1 ms)");
+    EXPECT_NE(describeChip({EPN_CHIP_NONE, 0, 0}).find("soquete vazio"), std::string::npos);
 }

@@ -136,6 +136,9 @@ void ProgrammerWorker::doOperation(const OperationRequest& request) {
             case Operation::SdpDisable:
                 p.setSdp(false);
                 break;
+            case Operation::Identify:
+                result.identification = p.identify();
+                break;
         }
         // Sucesso = sem diferenças na verificação e chip vazio no blank check.
         result.success = result.diffs.empty() && result.blank.blank;

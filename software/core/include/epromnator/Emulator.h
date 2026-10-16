@@ -14,6 +14,7 @@
 //    * restrição de página na escrita (bytes devem estar na mesma página);
 //    * SDP: com a proteção ativa, escritas sem a sequência de desbloqueio
 //      falham com ERR_TIMEOUT (como no chip real, que as ignora);
+//    * IDENTIFY: informa o tipo (EEPROM ou SRAM) e o tamanho físico do chip;
 //    * injeção de falhas: respostas corrompidas ou perdidas.
 // =============================================================================
 #pragma once
@@ -22,6 +23,7 @@
 #include <memory>
 #include <vector>
 
+#include "epromnator/Device.h"
 #include "epromnator/Transport.h"
 
 class FrameParser;  // firmware/lib/framing/FrameParser.h
@@ -30,7 +32,7 @@ namespace epn {
 
 class EmulatorTransport final : public Transport {
 public:
-    // Cria o emulador com uma EEPROM de `chipSize` bytes cheia de 0xFF.
+    // Cria o emulador com um chip de `chipSize` bytes cheio de 0xFF.
     // Como o Nano real, envia HELLO assim que é "aberto".
     explicit EmulatorTransport(uint32_t chipSize = 32768);
     ~EmulatorTransport() override;
@@ -44,6 +46,9 @@ public:
 
     // Conteúdo da EEPROM simulada (pode ser alterado diretamente).
     std::vector<uint8_t>& memory() { return memory_; }
+
+    // Tipo do chip simulado (padrão: EEPROM), informado por IDENTIFY.
+    void setChipType(ChipType type) { chipType_ = type; }
 
     // Estado da proteção SDP simulada.
     bool sdpEnabled() const { return sdpEnabled_; }
@@ -74,6 +79,8 @@ private:
     std::unique_ptr<FrameParser> parser_;
     std::deque<uint8_t> output_;  // bytes "enviados pelo firmware" ainda não lidos
     std::vector<uint8_t> memory_;
+    const uint32_t physicalSize_;  // tamanho real do chip (IDENTIFY)
+    ChipType chipType_ = ChipType::Eeprom;
 
     // Configuração atual (comando CONFIG).
     uint32_t size_;

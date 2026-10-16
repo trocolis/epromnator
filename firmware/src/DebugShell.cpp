@@ -72,6 +72,7 @@ void printHelp() {
     Serial.println(F("  c                     CRC32 do chip inteiro"));
     Serial.println(F("  e                     apaga o chip inteiro"));
     Serial.println(F("  s <0|1>               desabilita/habilita SDP"));
+    Serial.println(F("  i                     identifica o chip (tipo e tamanho)"));
     Serial.println(F("  v [end]               mede VCC (e o minimo durante uma gravacao)"));
     Serial.println(F("  t !                   autoteste DESTRUTIVO do chip inteiro"));
 }
@@ -300,6 +301,25 @@ void commandSelfTest(char* args) {
     Serial.println(errors);
 }
 
+// Identifica o chip no soquete (grava e restaura alguns bytes).
+void commandIdentify() {
+    static const char* const kinds[] = {"nenhum (soquete vazio?)", "SRAM", "EEPROM",
+                                        "EEPROM com SDP ativo", "somente leitura"};
+    const Eeprom::Identity id = Eeprom::identify();
+    Serial.print(F("tipo: "));
+    Serial.println(id.kind < sizeof(kinds) / sizeof(kinds[0]) ? kinds[id.kind] : "?");
+    if (id.size) {
+        Serial.print(F("tamanho: "));
+        Serial.print(id.size / 1024);
+        Serial.println(F(" KB"));
+    }
+    if (id.writeTimeUs) {
+        Serial.print(F("ciclo de gravacao: "));
+        Serial.print(id.writeTimeUs);
+        Serial.println(F(" us"));
+    }
+}
+
 // Executa a linha completa que está em lineBuffer.
 void execute() {
     char* args = lineBuffer + 1;  // tudo após a letra do comando
@@ -374,6 +394,10 @@ void execute() {
             } else {
                 Serial.println(F("uso: s <0|1>"));
             }
+            break;
+
+        case 'i':
+            commandIdentify();
             break;
 
         case 't':

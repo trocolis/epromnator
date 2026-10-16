@@ -60,6 +60,12 @@ struct AutoOptions {
     bool verify = true;           // 4) verifica
 };
 
+// Resultado de Programmer::identify().
+struct Identification {
+    ChipIdentity chip;                   // o que o firmware detectou
+    const Device* suggestion = nullptr;  // entrada do banco sugerida (ou nenhuma)
+};
+
 class Programmer {
 public:
     // Função de progresso: etapa ("Lendo", "Gravando"...), feito e total.
@@ -123,6 +129,11 @@ public:
     // Habilita/desabilita a proteção de dados por software.
     void setSdp(bool enabled);
 
+    // Identifica o tipo e o tamanho do chip no soquete (grava e restaura
+    // alguns bytes) e sugere a entrada do banco correspondente. Não muda o
+    // chip selecionado.
+    Identification identify();
+
     // Sequência AUTO: apagar → verificar vazio → gravar → verificar.
     std::vector<Difference> autoProgram(std::span<const uint8_t> image, Range range = {},
                                         AutoOptions options = {});
@@ -149,6 +160,10 @@ private:
     LogFn log_;
     const std::atomic<bool>* cancel_ = nullptr;
 };
+
+// Descreve um chip identificado, ex.: "EEPROM de 32 KB (ciclo de gravação
+// de 3.1 ms)".
+std::string describeChip(const ChipIdentity& chip);
 
 // Formata um endereço como "0x1A2B".
 std::string formatAddress(uint32_t address);

@@ -25,7 +25,10 @@ uint32_t nowMs() {
 }  // namespace
 
 EmulatorTransport::EmulatorTransport(uint32_t chipSize)
-    : parser_(std::make_unique<FrameParser>()), memory_(chipSize, 0xFF), size_(chipSize) {
+    : parser_(std::make_unique<FrameParser>()),
+      memory_(chipSize, 0xFF),
+      physicalSize_(chipSize),
+      size_(chipSize) {
     // Mesmo comportamento do firmware ao ligar.
     respond(EPN_CMD_HELLO, 0, EPN_STATUS_OK, helloPayload());
 }
@@ -78,11 +81,11 @@ std::vector<uint8_t> EmulatorTransport::helloPayload() const {
     std::vector<uint8_t> p(EPN_INFO_MIN_SIZE);
     p[EPN_INFO_PROTOCOL] = EPN_PROTOCOL_VERSION;
     p[EPN_INFO_FW_MAJOR] = 1;
-    p[EPN_INFO_FW_MINOR] = 0;
+    p[EPN_INFO_FW_MINOR] = 1;
     p[EPN_INFO_FW_PATCH] = 0;
     epn_put_u16(&p[EPN_INFO_MAX_READ], EPN_MAX_READ_CHUNK);
     p[EPN_INFO_MAX_WRITE] = EPN_MAX_WRITE_CHUNK;
-    p[EPN_INFO_FLAGS] = EPN_CAP_SDP | EPN_CAP_PAGE_WRITE;
+    p[EPN_INFO_FLAGS] = EPN_CAP_SDP | EPN_CAP_PAGE_WRITE | EPN_CAP_IDENTIFY;
     const std::string name = "EPROMnator (emulador)";
     p.insert(p.end(), name.begin(), name.end());
     return p;
@@ -239,6 +242,18 @@ void EmulatorTransport::dispatch(uint8_t cmd, uint8_t seq, const uint8_t* p, uin
         case EPN_CMD_SDP_DISABLE:
             sdpEnabled_ = false;
             return respond(cmd, seq, EPN_STATUS_OK);
+
+        case EPN_CMD_IDENTIFY: {
+            if (len != 0) return respond(cmd, seq, EPN_STATUS_ERR_LENGTH);
+            std::vector<uint8_t> payload(EPN_IDENTIFY_PAYLOAD_LEN, 0);
+            const bool sram = chipType_ == ChipType::Sram;
+            payload[EPN_IDENTIFY_KIND] = sram          ? EPN_CHIP_SRAM
+                                         : sdpEnabled_ ? EPN_CHIP_EEPROM_SDP
+                                                       : EPN_CHIP_EEPROM;
+            epn_put_u32(&payload[EPN_IDENTIFY_SIZE], physicalSize_);
+            epn_put_u32(&payload[EPN_IDENTIFY_WRITE_US], sram ? 0 : 3000);
+            return respond(cmd, seq, EPN_STATUS_OK, payload);
+        }
 
         default:
             return respond(cmd, seq, EPN_STATUS_ERR_UNKNOWN);

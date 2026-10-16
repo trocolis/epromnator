@@ -1,8 +1,8 @@
 # EPROMnator
 
-Gravador de EEPROMs paralelas **28Cxxx** (AT28C256 e compatíveis) baseado em
-**Arduino Nano**, com firmware PlatformIO e software multiplataforma em C++
-(CLI e interface gráfica Qt 6).
+Gravador de EEPROMs paralelas **28Cxxx** (AT28C256 e compatíveis) e SRAMs
+**62256** baseado em **Arduino Nano**, com firmware PlatformIO e software
+multiplataforma em C++ (CLI e interface gráfica Qt 6).
 
 ```
 hardware/   esquema KiCad (Nano + 2× 74HC595 + soquete de 28 pinos)
@@ -15,16 +15,24 @@ docs/       plano de implementação
 
 ## Chips suportados
 
-| Chip                | Tamanho | Página | SDP |
-|---------------------|---------|--------|-----|
-| AT28C256 / AT28C256F| 32 KB   | 64     | sim |
-| CAT28C256, X28C256  | 32 KB   | 64     | sim |
-| 28C256 (genérico)   | 32 KB   | 64     | sim |
-| AT28C64B, X28C64    | 8 KB    | 64     | sim |
-| 28C64 (modo byte)   | 8 KB    | —      | não |
+| Chip                | Tipo   | Tamanho | Página | SDP | Observação              |
+|---------------------|--------|---------|--------|-----|-------------------------|
+| AT28C256 / AT28C256F| EEPROM | 32 KB   | 64     | sim |                         |
+| CAT28C256, X28C256  | EEPROM | 32 KB   | 64     | sim |                         |
+| 28C256 (genérico)   | EEPROM | 32 KB   | 64     | sim |                         |
+| X28C512, CAT28C512  | EEPROM | 64 KB   | 64     | sim | 32 pinos, com adaptador |
+| 28C512 (genérico)   | EEPROM | 64 KB   | 64     | sim | 32 pinos, com adaptador |
+| AT28C64B, X28C64    | EEPROM | 8 KB    | 64     | sim |                         |
+| 28C64 (modo byte)   | EEPROM | 8 KB    | —      | não |                         |
+| 62256 (KM62256...)  | SRAM   | 32 KB   | 64     | não | conteúdo mantido por bateria |
 
-Somente EEPROMs de 5 V com pinagem JEDEC de 28 pinos. EPROMs UV (que precisam
-de Vpp) e flashes de 32 pinos não são suportadas por este hardware.
+Somente chips de 5 V com pinagem JEDEC de 28 pinos, ou de 32 pinos e 64 KB com
+o adaptador descrito abaixo. EPROMs UV (que precisam de Vpp) não são
+suportadas por este hardware.
+
+O comando **identificar** (`identify` na CLI, Ctrl+I na GUI) descobre se o chip
+no soquete é EEPROM ou SRAM, mede o tamanho e sugere a entrada da lista. Para
+isso ele grava e restaura até 6 bytes; não desligue a placa durante o comando.
 
 ---
 
@@ -41,6 +49,23 @@ Mapa de pinos (conferido na netlist):
 | LED "ocupado" | D13       | PB5       | LED onboard do Nano |
 
 > ⚠️ A EEPROM fica sempre alimentada: **não troque o chip com o USB ligado.**
+
+### Adaptador para chips de 32 pinos (64 KB)
+
+O soquete de 28 pinos vai só até A14. A linha **A15** já sai do segundo 74HC595
+(**U2, saída QH, pino 7**), que hoje não está ligada a nada. O adaptador leva
+esse sinal ao chip. Pinagem JEDEC (confira no datasheet do seu chip):
+
+| Sinal  | Soquete 28 pinos | Chip 32 pinos |
+|--------|------------------|---------------|
+| A15    | — (fio de U2.QH) | 3             |
+| A14    | 1                | 29            |
+| A0–A13, D0–D7, GND, ~CE, ~OE | 2…26 | 4…28 (mesma ordem, +2) |
+| ~WE    | 27               | 31            |
+| VCC    | 28               | 32            |
+| —      | —                | 1, 2, 30 sem ligação |
+
+Com um chip de 28 pinos no soquete, A15 continua sem efeito.
 
 Correções já aplicadas ao esquema: LED D1 estava invertido; C3 recebeu valor
 (10 µF).
@@ -151,6 +176,7 @@ Fluxo típico: escolha a **porta** e o **chip** → **Abrir** o arquivo → **AU
 | F7     | Verificar       | Ctrl+G  | Ir para endereço      |
 | F8     | Apagar          | Ctrl+L  | Preencher buffer      |
 | F9     | AUTO            | Esc     | Cancelar              |
+|        |                 | Ctrl+I  | Identificar chip      |
 
 Recursos:
 
@@ -174,9 +200,10 @@ epromnator-cli -p /dev/ttyUSB0 write rom.hex --skip-ff
 epromnator-cli -p COM3 -d AT28C64B auto rom.bin
 epromnator-cli -p /dev/ttyUSB0 verify rom.s19 -o -0x8000
 epromnator-cli -p emu auto rom.bin                     # emulador
+epromnator-cli -p /dev/ttyUSB0 identify                # EEPROM ou SRAM? tamanho?
 ```
 
-Operações: `read`, `write`, `verify`, `erase`, `blank`, `auto`, `sdp-on`,
+Operações: `read`, `write`, `verify`, `erase`, `blank`, `auto`, `identify`, `sdp-on`,
 `sdp-off`, `info`, `checksum`, `list-devices`, `list-ports`. Use
 `epromnator-cli --help` para ver todas as opções.
 
@@ -202,6 +229,7 @@ envia um quadro `HELLO`. A especificação completa está em
 | `CRC32`        | CRC de uma faixa (verificação rápida)      |
 | `ERASE`        | preenche com 0xFF, pulando páginas vazias  |
 | `SDP_ENABLE` / `SDP_DISABLE` | proteção de dados por software |
+| `IDENTIFY`     | tipo (EEPROM/SRAM) e tamanho do chip (firmware 1.1.0+) |
 
 Para a verificação, o firmware calcula o CRC32 de cada bloco de 1 KB e só os
 blocos que divergem são lidos byte a byte.
@@ -218,11 +246,14 @@ Validado em hardware (Nano clone CH340, bootloader antigo, AT28C256):
   no endereço exato;
 - SDP: com a proteção ativa, a escrita comum é bloqueada e a protegida passa;
   depois de desabilitada, a escrita comum volta a funcionar.
+- SRAM KM62256DLP-7L com bateria: identificada como SRAM de 32 KB (5 de 5
+  vezes, conteúdo intacto depois da identificação) e AUTO de 32 KB com dados
+  aleatórios em 9,1 s.
 
 Testes automatizados:
 
 - `firmware/test`: 11 testes Unity (framing e CRC), com `pio test -e native`;
-- `software/tests`: 46 testes GTest (formatos de arquivo, protocolo e operações
+- `software/tests`: 53 testes GTest (formatos de arquivo, protocolo e operações
   contra o emulador, que usa o mesmo `FrameParser` do firmware);
 - `.github/workflows/ci.yml`: compila o firmware e o software em Linux, Windows
   e macOS e gera AppImage, `.zip` e `.dmg`. Em tags `v*`, publica um release.

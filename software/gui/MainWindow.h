@@ -154,6 +154,7 @@ private:
     QAction* actSaveAs_ = nullptr;
     QAction* actQuit_ = nullptr;
     QAction* actChooseDevice_ = nullptr;
+    QAction* actIdentify_ = nullptr;
     QAction* actConnect_ = nullptr;
     QAction* actRead_ = nullptr;
     QAction* actProgram_ = nullptr;

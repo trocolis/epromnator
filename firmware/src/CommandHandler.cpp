@@ -75,7 +75,7 @@ void sendInfo(uint8_t cmd, uint8_t seq) {
     info[EPN_INFO_FW_PATCH] = FW_VERSION_PATCH;
     epn_put_u16(&info[EPN_INFO_MAX_READ], EPN_MAX_READ_CHUNK);
     info[EPN_INFO_MAX_WRITE] = EPN_MAX_WRITE_CHUNK;
-    info[EPN_INFO_FLAGS] = EPN_CAP_SDP | EPN_CAP_PAGE_WRITE;
+    info[EPN_INFO_FLAGS] = EPN_CAP_SDP | EPN_CAP_PAGE_WRITE | EPN_CAP_IDENTIFY;
 
     const uint16_t nameLength = sizeof(DEVICE_NAME) - 1;  // sem o '\0'
     writer.begin(cmd, seq, EPN_STATUS_OK, sizeof(info) + nameLength);
@@ -202,6 +202,20 @@ void handleErase(uint8_t cmd, uint8_t seq, const uint8_t* p, uint16_t len) {
     replyWriteResult(cmd, seq, r, failAddress);
 }
 
+// IDENTIFY → [tipo u8][tamanho u32][ciclo de gravação µs u32]
+void handleIdentify(uint8_t cmd, uint8_t seq, uint16_t len) {
+    if (len != 0) {
+        writer.send(cmd, seq, EPN_STATUS_ERR_LENGTH);
+        return;
+    }
+    const Eeprom::Identity id = Eeprom::identify();
+    uint8_t payload[EPN_IDENTIFY_PAYLOAD_LEN];
+    payload[EPN_IDENTIFY_KIND] = id.kind;
+    epn_put_u32(&payload[EPN_IDENTIFY_SIZE], id.size);
+    epn_put_u32(&payload[EPN_IDENTIFY_WRITE_US], id.writeTimeUs);
+    writer.send(cmd, seq, EPN_STATUS_OK, payload, sizeof(payload));
+}
+
 // Executa um quadro válido.
 void dispatch(uint8_t cmd, uint8_t seq, const uint8_t* p, uint16_t len) {
     switch (cmd) {
@@ -236,6 +250,9 @@ void dispatch(uint8_t cmd, uint8_t seq, const uint8_t* p, uint16_t len) {
         case EPN_CMD_SDP_DISABLE:
             Eeprom::sdpDisable();
             writer.send(cmd, seq, EPN_STATUS_OK);
+            break;
+        case EPN_CMD_IDENTIFY:
+            handleIdentify(cmd, seq, len);
             break;
         default:
             writer.send(cmd, seq, EPN_STATUS_ERR_UNKNOWN);

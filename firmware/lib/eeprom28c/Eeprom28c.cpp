@@ -67,8 +67,7 @@ inline void loadByte(uint16_t address, uint8_t value) {
 
 // Sequência de 3 bytes que precede uma escrita quando o SDP está ativo
 // (e que, sozinha, também habilita o SDP).
-inline void loadSdpUnlock() {
-    const uint16_t mask = addressMask();
+inline void loadSdpUnlock(uint16_t mask = addressMask()) {
     loadByte(SDP_ADDR_1 & mask, 0xAA);
     loadByte(SDP_ADDR_2 & mask, 0x55);
     loadByte(SDP_ADDR_1 & mask, 0xA0);
@@ -324,6 +323,140 @@ uint32_t crc32(uint16_t address, uint32_t count) {
     Bus::oeHigh();
     Bus::ceHigh();
     return epn_crc32_final(crc);
+}
+
+// =============================================================================
+//  Identificação
+// =============================================================================
+
+namespace {
+
+// Limite para o fim de um ciclo de gravação durante a identificação (o
+// tWC máximo dos chips suportados é 10 ms).
+constexpr uint32_t PROBE_TIMEOUT_US = 20000UL;
+
+// Endereços usados para detectar o tamanho por espelhamento. Só A13 e A15:
+// A14 em nível alto entraria em conflito com o RDY/~BUSY do 28C64.
+constexpr uint16_t ALIAS_8K  = 0x2000;  // 28C64 não tem A13
+constexpr uint16_t ALIAS_32K = 0x8000;  // soquete de 28 pinos não tem A15
+
+// Máscaras das tentativas de escrita protegida: 1555/0AAA (28C64, sem A14)
+// e depois 5555/2AAA (28C256 e 28C512).
+const uint16_t UNLOCK_MASKS[] = {0x1FFF, 0x7FFF};
+
+// Lê um byte depois de pré-carregar o barramento com `precharge`. Com o
+// chip ausente (ou com as saídas desligadas) as linhas flutuam e mantêm o
+// valor pré-carregado na sua capacitância; com o chip presente, ele impõe
+// o valor real dentro do tempo de acesso.
+uint8_t readPrecharged(uint16_t address, uint8_t precharge) {
+    Bus::setAddress(address);
+    Bus::dataAsOutput();
+    Bus::writeData(precharge);
+    Bus::settleDelay();
+    Bus::dataAsInput();
+    Bus::ceLow();
+    Bus::oeLow();
+    Bus::accessDelay();
+    const uint8_t value = Bus::readData();
+    Bus::oeHigh();
+    Bus::ceHigh();
+    return value;
+}
+
+// Resposta do chip a uma escrita de teste.
+enum class Probe : uint8_t {
+    Immediate,  // valor gravado aparece na hora (SRAM)
+    Delayed,    // valor aparece depois de um ciclo de gravação (EEPROM)
+    Ignored,    // valor nunca aparece (escrita recusada)
+};
+
+// Grava `value` em `address` (com a sequência SDP se `unlockMask` != 0) e
+// observa quando o valor aparece. Toda leitura é feita com o barramento
+// pré-carregado com o complemento, para não confundir a capacitância das
+// linhas com o chip respondendo.
+Probe probeWrite(uint16_t address, uint8_t value, uint16_t unlockMask,
+                 uint32_t* busyUs = nullptr) {
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+        beginWrite();
+        if (unlockMask) loadSdpUnlock(unlockMask);
+        loadByte(address, value);
+        endWrite();
+    }
+    const uint8_t precharge = (uint8_t)~value;
+    const uint32_t start = micros();
+
+    // SRAM: o valor aparece na hora. Conferimos de novo depois de 1 ms
+    // (além do tBLC de 150 µs), para que uma EEPROM ainda na janela de
+    // carga de página não se passe por SRAM.
+    if (readPrecharged(address, precharge) == value) {
+        delayMicroseconds(1000);
+        if (readPrecharged(address, precharge) == value) return Probe::Immediate;
+    }
+
+    while ((uint32_t)(micros() - start) < PROBE_TIMEOUT_US) {
+        if (readPrecharged(address, precharge) == value) {
+            if (busyUs) *busyUs = micros() - start;
+            return Probe::Delayed;
+        }
+    }
+    return Probe::Ignored;
+}
+
+// Grava em `alias` um valor diferente do que está em 0x0000 e confere se
+// ele aparece em 0x0000, ou seja, se o chip não tem a linha de endereço que
+// separa os dois. O byte original é restaurado.
+bool isAliased(uint16_t alias, uint16_t unlockMask) {
+    const uint8_t original = readByte(alias);
+    // Conteúdos diferentes não podem ser a mesma célula: sem gravar nada.
+    if (readByte(0) != original) return false;
+
+    const uint8_t marker = (uint8_t)~original;
+    if (probeWrite(alias, marker, unlockMask) == Probe::Ignored) return false;
+    const bool aliased = readByte(0) == marker;
+    probeWrite(alias, original, unlockMask);
+    return aliased;
+}
+
+}  // namespace
+
+Identity identify() {
+    Identity id = {EPN_CHIP_NONE, 0, 0};
+
+    // 1) Há chip? Com o soquete vazio, a leitura acompanha a pré-carga.
+    const uint16_t probeAddress = 0;
+    const uint8_t original = readPrecharged(probeAddress, 0x00);
+    if (readPrecharged(probeAddress, 0xFF) != original) return id;
+
+    // 2) Escrita simples; se for ignorada, escrita protegida (SDP ativo).
+    const uint8_t marker = (uint8_t)~original;
+    uint16_t unlockMask = 0;
+    Probe probe = probeWrite(probeAddress, marker, 0, &id.writeTimeUs);
+    for (uint8_t i = 0; probe == Probe::Ignored && i < sizeof(UNLOCK_MASKS) / sizeof(UNLOCK_MASKS[0]); ++i) {
+        unlockMask = UNLOCK_MASKS[i];
+        probe = probeWrite(probeAddress, marker, unlockMask, &id.writeTimeUs);
+    }
+    if (probe == Probe::Ignored) {
+        id.kind = EPN_CHIP_READ_ONLY;
+        id.writeTimeUs = 0;
+        return id;
+    }
+    if (probe == Probe::Immediate) {
+        id.kind = EPN_CHIP_SRAM;
+        id.writeTimeUs = 0;
+    } else {
+        id.kind = unlockMask ? EPN_CHIP_EEPROM_SDP : EPN_CHIP_EEPROM;
+    }
+    probeWrite(probeAddress, original, unlockMask);
+
+    // 3) Tamanho por espelhamento: 8 KB sem A13, 32 KB sem A15.
+    if (isAliased(ALIAS_8K, unlockMask)) {
+        id.size = 8192UL;
+    } else if (isAliased(ALIAS_32K, unlockMask)) {
+        id.size = 32768UL;
+    } else {
+        id.size = 65536UL;
+    }
+    return id;
 }
 
 }  // namespace Eeprom

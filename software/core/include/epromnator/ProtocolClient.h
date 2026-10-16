@@ -39,6 +39,13 @@ struct FirmwareInfo {
     std::string description() const;
 };
 
+// Resultado de IDENTIFY.
+struct ChipIdentity {
+    uint8_t kind = 0;          // EPN_CHIP_*
+    uint32_t size = 0;         // capacidade detectada (0 = desconhecida)
+    uint32_t writeTimeUs = 0;  // ciclo de gravação medido (EEPROM)
+};
+
 // Parâmetros enviados ao firmware pelo comando CONFIG.
 struct ChipConfig {
     uint32_t size = 32768;
@@ -73,6 +80,7 @@ public:
     uint32_t crc32(uint32_t address, uint32_t length);
     void erase(uint32_t address, uint32_t length, std::chrono::milliseconds timeout);
     void setSdp(bool enabled, std::chrono::milliseconds timeout);
+    ChipIdentity identify();
 
     // Quantas vezes uma requisição é repetida após timeout/CRC inválido.
     void setRetries(int retries) { retries_ = retries; }

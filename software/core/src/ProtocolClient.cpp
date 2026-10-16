@@ -250,4 +250,14 @@ void ProtocolClient::setSdp(bool enabled, std::chrono::milliseconds timeout) {
     transact(enabled ? EPN_CMD_SDP_ENABLE : EPN_CMD_SDP_DISABLE, {}, timeout);
 }
 
+ChipIdentity ProtocolClient::identify() {
+    // Pior caso no firmware: ~10 escritas de teste de até 20 ms cada.
+    const auto r = transact(EPN_CMD_IDENTIFY, {}, 2000ms);
+    if (r.size() != EPN_IDENTIFY_PAYLOAD_LEN) {
+        throw TransportError("Resposta IDENTIFY com tamanho inválido");
+    }
+    return {r[EPN_IDENTIFY_KIND], epn_get_u32(&r[EPN_IDENTIFY_SIZE]),
+            epn_get_u32(&r[EPN_IDENTIFY_WRITE_US])};
+}
+
 }  // namespace epn

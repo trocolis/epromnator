@@ -21,7 +21,13 @@ constexpr const char* kNote28C64 =
     "Chip de 8 KB: o pino 1 é RDY/~BUSY e o 26 não é ligado; "
     "o firmware mantém A13/A14 em nível baixo.";
 
-const std::array<Device, 8> kDevices = {{
+// Observação comum aos chips de 64 KB (32 pinos).
+constexpr const char* kNote28C512 =
+    "Chip de 64 KB e 32 pinos: precisa do adaptador que liga A15 à saída QH "
+    "do segundo 74HC595 (ver README). Gravado em blocos de 64 bytes, que "
+    "cabem em páginas de 64 ou 128 bytes.";
+
+const std::array<Device, 12> kDevices = {{
     {"AT28C256", "Atmel/Microchip", 32768, 64, 15, true,
      "EEPROM 32K x 8, páginas de 64 bytes, tWC 10 ms."},
     {"AT28C256F", "Atmel/Microchip", 32768, 64, 8, true,
@@ -32,10 +38,17 @@ const std::array<Device, 8> kDevices = {{
      "EEPROM 32K x 8, páginas de 64 bytes, tWC 5 ms."},
     {"28C256 (genérico)", "Genérico", 32768, 64, 20, true,
      "Parâmetros conservadores para clones de origem desconhecida."},
+    {"X28C512", "Xicor/Intersil", 65536, 64, 15, true, kNote28C512},
+    {"CAT28C512", "Catalyst/onsemi", 65536, 64, 15, true, kNote28C512},
+    {"28C512 (genérico)", "Genérico", 65536, 64, 20, true, kNote28C512},
     {"AT28C64B", "Atmel/Microchip", 8192, 64, 15, true, kNote28C64},
     {"X28C64", "Xicor/Intersil", 8192, 64, 15, true, kNote28C64},
     {"28C64 (modo byte)", "Genérico", 8192, 0, 15, false,
      "Grava byte a byte: compatível com chips sem modo página (mais lento)."},
+    {"62256 (SRAM)", "Genérico", 32768, 64, 2, false,
+     "SRAM 32K x 8 (KM62256, HM62256, UM62256...), mesma pinagem do 28C256. "
+     "Grava na hora; o conteúdo só se mantém com bateria. Sem SDP.",
+     ChipType::Sram},
 }};
 
 // Compara duas strings ignorando maiúsculas/minúsculas (apenas ASCII).
@@ -49,6 +62,10 @@ bool equalsIgnoreCase(std::string_view a, std::string_view b) {
 
 }  // namespace
 
+std::string chipTypeName(ChipType type) {
+    return type == ChipType::Sram ? "SRAM" : "EEPROM";
+}
+
 std::span<const Device> deviceDatabase() { return kDevices; }
 
 const Device* findDevice(std::string_view name) {
@@ -56,6 +73,16 @@ const Device* findDevice(std::string_view name) {
         if (equalsIgnoreCase(d.name, name)) return &d;
     }
     return nullptr;
+}
+
+const Device* suggestDevice(ChipType type, uint32_t size) {
+    const Device* first = nullptr;
+    for (const Device& d : kDevices) {
+        if (d.type != type || d.size != size) continue;
+        if (d.manufacturer == "Genérico" && d.pageSize > 1) return &d;
+        if (!first) first = &d;
+    }
+    return first;
 }
 
 }  // namespace epn

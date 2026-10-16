@@ -18,14 +18,14 @@ DeviceDialog::DeviceDialog(const QString& current, QWidget* parent) : QDialog(pa
     resize(620, 420);
 
     search_ = new QLineEdit(this);
-    search_->setPlaceholderText(tr("Buscar por nome ou fabricante..."));
+    search_->setPlaceholderText(tr("Buscar por nome, tipo ou fabricante..."));
     search_->setClearButtonEnabled(true);
 
     // Tabela com uma linha por dispositivo do banco.
     const auto devices = epn::deviceDatabase();
-    table_ = new QTableWidget(static_cast<int>(devices.size()), 5, this);
+    table_ = new QTableWidget(static_cast<int>(devices.size()), 6, this);
     table_->setHorizontalHeaderLabels(
-        {tr("Chip"), tr("Fabricante"), tr("Tamanho"), tr("Página"), tr("SDP")});
+        {tr("Chip"), tr("Tipo"), tr("Fabricante"), tr("Tamanho"), tr("Página"), tr("SDP")});
     table_->setSelectionBehavior(QAbstractItemView::SelectRows);
     table_->setSelectionMode(QAbstractItemView::SingleSelection);
     table_->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -35,11 +35,12 @@ DeviceDialog::DeviceDialog(const QString& current, QWidget* parent) : QDialog(pa
     for (int row = 0; row < static_cast<int>(devices.size()); ++row) {
         const epn::Device& d = devices[static_cast<size_t>(row)];
         table_->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(d.name)));
-        table_->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(d.manufacturer)));
-        table_->setItem(row, 2, new QTableWidgetItem(tr("%1 KB").arg(d.size / 1024)));
-        table_->setItem(row, 3, new QTableWidgetItem(d.pageSize > 1 ? QString::number(d.pageSize)
+        table_->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(epn::chipTypeName(d.type))));
+        table_->setItem(row, 2, new QTableWidgetItem(QString::fromStdString(d.manufacturer)));
+        table_->setItem(row, 3, new QTableWidgetItem(tr("%1 KB").arg(d.size / 1024)));
+        table_->setItem(row, 4, new QTableWidgetItem(d.pageSize > 1 ? QString::number(d.pageSize)
                                                                     : tr("byte")));
-        table_->setItem(row, 4, new QTableWidgetItem(d.supportsSdp ? tr("sim") : tr("não")));
+        table_->setItem(row, 5, new QTableWidgetItem(d.supportsSdp ? tr("sim") : tr("não")));
         if (QString::fromStdString(d.name) == current) table_->selectRow(row);
     }
     table_->resizeColumnsToContents();
@@ -80,7 +81,8 @@ void DeviceDialog::applyFilter(const QString& text) {
     for (int row = 0; row < table_->rowCount(); ++row) {
         const bool match = text.isEmpty() ||
                            table_->item(row, 0)->text().contains(text, Qt::CaseInsensitive) ||
-                           table_->item(row, 1)->text().contains(text, Qt::CaseInsensitive);
+                           table_->item(row, 1)->text().contains(text, Qt::CaseInsensitive) ||
+                           table_->item(row, 2)->text().contains(text, Qt::CaseInsensitive);
         table_->setRowHidden(row, !match);
         if (match && firstVisible < 0) firstVisible = row;
     }

@@ -35,6 +35,7 @@ enum class Operation {
     Auto,
     SdpEnable,
     SdpDisable,
+    Identify,
 };
 
 // Parâmetros de uma operação.
@@ -56,6 +57,7 @@ struct OperationResult {
     epn::Range range;                      // faixa efetivamente usada
     std::vector<epn::Difference> diffs;    // Verify/Program/Auto
     epn::BlankCheckResult blank;           // BlankCheck
+    epn::Identification identification;    // Identify
     QString firmware;                      // descrição do firmware (Connect)
 };
 Q_DECLARE_METATYPE(OperationResult)

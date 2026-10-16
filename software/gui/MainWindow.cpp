@@ -113,6 +113,7 @@ QString operationName(Operation op) {
         case Operation::Auto:       return QObject::tr("AUTO");
         case Operation::SdpEnable:  return QObject::tr("Habilitar SDP");
         case Operation::SdpDisable: return QObject::tr("Desabilitar SDP");
+        case Operation::Identify:   return QObject::tr("Identificar chip");
     }
     return {};
 }
@@ -198,7 +199,11 @@ void MainWindow::createActions() {
                             QKeySequence(Qt::CTRL | Qt::Key_D), tr("Escolhe o modelo da EEPROM"));
     actConnect_ = make(tr("C&onectar"), themeIcon("network-connect", QStyle::SP_DriveNetIcon),
                        QKeySequence(Qt::CTRL | Qt::Key_K), tr("Conecta/desconecta o gravador"));
+    actIdentify_ = make(tr("&Identificar chip"), themeIcon("system-search", QStyle::SP_FileDialogContentsView),
+                        QKeySequence(Qt::CTRL | Qt::Key_I),
+                        tr("Detecta o tipo e o tamanho do chip no soquete"));
     connect(actChooseDevice_, &QAction::triggered, this, &MainWindow::chooseDevice);
+    connect(actIdentify_, &QAction::triggered, this, [this] { startOperation(Operation::Identify); });
     connect(actConnect_, &QAction::triggered, this, &MainWindow::toggleConnection);
 
     // Operações (atalhos F5..F9 como nos gravadores comerciais)
@@ -254,7 +259,7 @@ void MainWindow::createActions() {
         QMessageBox::about(
             this, tr("Sobre o %1").arg(epn::kAppName),
             tr("<h3>%1 %2</h3>"
-               "<p>Gravador de EEPROMs paralelas 28Cxxx baseado em Arduino Nano.</p>"
+               "<p>Gravador de EEPROMs paralelas 28Cxxx e SRAMs baseado em Arduino Nano.</p>"
                "<p>Formatos: binário, Intel HEX e Motorola S-Record.</p>"
                "<p>Atalhos: F5 Ler · F6 Gravar · F7 Verificar · F8 Apagar · F9 AUTO · "
                "Esc Cancelar</p>")
@@ -273,6 +278,7 @@ void MainWindow::createMenus() {
 
     QMenu* device = menuBar()->addMenu(tr("&Dispositivo"));
     device->addAction(actChooseDevice_);
+    device->addAction(actIdentify_);
     device->addAction(actConnect_);
 
     QMenu* ops = menuBar()->addMenu(tr("&Operações"));
@@ -311,6 +317,7 @@ void MainWindow::createToolBar() {
     bar->addAction(actSave_);
     bar->addSeparator();
     bar->addAction(actChooseDevice_);
+    bar->addAction(actIdentify_);
     bar->addSeparator();
     bar->addAction(actRead_);
     bar->addAction(actProgram_);
@@ -790,7 +797,8 @@ std::optional<epn::Range> MainWindow::currentRange() {
 void MainWindow::startOperation(Operation operation) {
     if (busy_) return;
 
-    const auto range = currentRange();
+    // A identificação não usa a faixa de endereços.
+    const auto range = operation == Operation::Identify ? std::optional(epn::Range{}) : currentRange();
     if (!range) return;
 
     // Não conectado: conecta primeiro e executa a operação em seguida.
@@ -941,6 +949,24 @@ void MainWindow::onOperationFinished(const OperationResult& r) {
                                              .arg(hex4(r.blank.firstUsedAddress), hex2(r.blank.value)));
             }
             break;
+        case Operation::Identify: {
+            const QString found = QString::fromStdString(epn::describeChip(r.identification.chip));
+            const epn::Device* suggestion = r.identification.suggestion;
+            if (!suggestion) {
+                QMessageBox::information(this, name, tr("Resultado: %1.").arg(found));
+            } else if (suggestion->name == device_.name ||
+                       (suggestion->type == device_.type && suggestion->size == device_.size)) {
+                QMessageBox::information(this, name,
+                                         tr("Resultado: %1.\n\nO chip selecionado (%2) é compatível.")
+                                             .arg(found, QString::fromStdString(device_.name)));
+            } else if (askYesNo(this, name,
+                                tr("Resultado: %1.\n\nO chip selecionado é %2. Selecionar %3?")
+                                    .arg(found, QString::fromStdString(device_.name),
+                                         QString::fromStdString(suggestion->name)))) {
+                applyDevice(*suggestion);
+            }
+            break;
+        }
         default:
             break;
     }
@@ -1087,7 +1113,8 @@ void MainWindow::updateActions() {
     // Durante uma operação, só "Cancelar" fica ativo.
     const bool idle = !busy_;
     for (QAction* a : {actRead_, actProgram_, actVerify_, actErase_, actBlank_, actAuto_, actOpen_,
-                       actChooseDevice_, actFill_, actClear_, actCompare_, recentMenu_->menuAction()}) {
+                       actChooseDevice_, actIdentify_, actFill_, actClear_, actCompare_,
+                       recentMenu_->menuAction()}) {
         a->setEnabled(idle);
     }
     actSdpOn_->setEnabled(idle && device_.supportsSdp);
@@ -1128,8 +1155,9 @@ void MainWindow::updateBufferInfo() {
 
 void MainWindow::updateDeviceInfo() {
     deviceName_->setText(QString::fromStdString(device_.name));
-    deviceDetails_->setText(tr("%1\n%2 KB (%3 bytes)\nPágina: %4 · SDP: %5")
-                                .arg(QString::fromStdString(device_.manufacturer))
+    deviceDetails_->setText(tr("%1 · %2\n%3 KB (%4 bytes)\nPágina: %5 · SDP: %6")
+                                .arg(QString::fromStdString(epn::chipTypeName(device_.type)),
+                                     QString::fromStdString(device_.manufacturer))
                                 .arg(device_.size / 1024)
                                 .arg(device_.size)
                                 .arg(device_.pageSize > 1 ? QString::number(device_.pageSize) : tr("—"))

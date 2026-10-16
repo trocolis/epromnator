@@ -51,6 +51,28 @@ std::string formatAddress(uint32_t address) {
     return buf;
 }
 
+std::string describeChip(const ChipIdentity& chip) {
+    std::string text;
+    switch (chip.kind) {
+        case EPN_CHIP_NONE:
+            return "nenhum chip respondeu (soquete vazio ou chip mal encaixado?)";
+        case EPN_CHIP_READ_ONLY:
+            return "o chip responde à leitura mas ignora escritas (ROM, EPROM ou "
+                   "EEPROM com proteção desconhecida)";
+        case EPN_CHIP_SRAM:       text = "SRAM"; break;
+        case EPN_CHIP_EEPROM:     text = "EEPROM"; break;
+        case EPN_CHIP_EEPROM_SDP: text = "EEPROM com proteção SDP ativa"; break;
+        default:                  return "resposta desconhecida do firmware";
+    }
+    if (chip.size) text += " de " + std::to_string(chip.size / 1024) + " KB";
+    if (chip.writeTimeUs) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), " (ciclo de gravação de %.1f ms)", chip.writeTimeUs / 1000.0);
+        text += buf;
+    }
+    return text;
+}
+
 // =============================================================================
 //  Construção e configuração
 // =============================================================================
@@ -302,6 +324,38 @@ void Programmer::setSdp(bool enabled) {
     }
     client_.setSdp(enabled, 500ms + std::chrono::milliseconds(device_.writeTimeoutMs * 2u));
     log(LogLevel::Info, enabled ? "Proteção SDP habilitada." : "Proteção SDP desabilitada.");
+}
+
+// =============================================================================
+//  Identificação
+// =============================================================================
+
+Identification Programmer::identify() {
+    if (!(info_.capabilities & EPN_CAP_IDENTIFY)) {
+        throw Error("O firmware " + info_.description() +
+                    " não identifica chips; grave a versão 1.1.0 ou mais recente.");
+    }
+    Identification result;
+    result.chip = client_.identify();
+    log(LogLevel::Info, "Chip identificado: " + describeChip(result.chip) + ".");
+
+    switch (result.chip.kind) {
+        case EPN_CHIP_SRAM:
+            result.suggestion = suggestDevice(ChipType::Sram, result.chip.size);
+            break;
+        case EPN_CHIP_EEPROM_SDP:
+            log(LogLevel::Warning, "Para gravar, use a escrita protegida ou desabilite o SDP.");
+            [[fallthrough]];
+        case EPN_CHIP_EEPROM:
+            result.suggestion = suggestDevice(ChipType::Eeprom, result.chip.size);
+            break;
+        default:
+            break;
+    }
+    if (result.suggestion) {
+        log(LogLevel::Info, "Chip sugerido: " + result.suggestion->name + ".");
+    }
+    return result;
 }
 
 // =============================================================================

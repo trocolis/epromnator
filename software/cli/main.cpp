@@ -7,6 +7,7 @@
 //    epromnator-cli -p /dev/ttyUSB0 -d AT28C256 read dump.bin
 //    epromnator-cli -p COM3 write rom.hex --skip-ff
 //    epromnator-cli -p emu auto rom.bin          (emulador, sem a placa)
+//    epromnator-cli -p /dev/ttyUSB0 identify
 //
 //  Códigos de saída:
 //    0 sucesso · 1 erro · 2 verificação falhou/chip não vazio · 3 uso incorreto
@@ -89,6 +90,7 @@ void printUsage() {
         "  blank               verifica se o chip está vazio\n"
         "  auto <arquivo>      apagar + verificar vazio + gravar + verificar\n"
         "  sdp-on | sdp-off    habilita/desabilita a proteção SDP\n"
+        "  identify            identifica o tipo e o tamanho do chip no soquete\n"
         "  info                mostra informações do gravador\n"
         "  checksum <arquivo>  soma16 e CRC32 do arquivo como imagem do chip\n"
         "  list-devices        lista os chips suportados\n"
@@ -305,10 +307,11 @@ int run(const Options& o) {
         return kExitOk;
     }
     if (o.operation == "list-devices") {
-        std::cout << padRight("Chip", 20) << padRight("Fabricante", 18) << padRight("Tamanho", 9)
-                  << padRight("Página", 8) << "SDP\n";
+        std::cout << padRight("Chip", 20) << padRight("Tipo", 8) << padRight("Fabricante", 18)
+                  << padRight("Tamanho", 9) << padRight("Página", 8) << "SDP\n";
         for (const Device& d : deviceDatabase()) {
-            std::cout << padRight(d.name, 20) << padRight(d.manufacturer, 18)
+            std::cout << padRight(d.name, 20) << padRight(chipTypeName(d.type), 8)
+                      << padRight(d.manufacturer, 18)
                       << padRight(std::to_string(d.size), 9)
                       << padRight(d.pageSize > 1 ? std::to_string(d.pageSize) : "byte", 8)
                       << (d.supportsSdp ? "sim" : "não") << "\n";
@@ -330,7 +333,8 @@ int run(const Options& o) {
 
     // Valida a operação antes de abrir a porta (que reinicia o Nano).
     static const char* const kDeviceOps[] = {"read",  "write", "verify",  "erase", "blank",
-                                             "auto",  "sdp-on", "sdp-off", "info"};
+                                             "auto",  "sdp-on", "sdp-off", "info",
+                                             "identify"};
     if (std::none_of(std::begin(kDeviceOps), std::end(kDeviceOps),
                      [&](const char* op) { return o.operation == op; })) {
         std::cerr << "Operação desconhecida: " << o.operation << "\n";
@@ -351,7 +355,16 @@ int run(const Options& o) {
     programmer.selectDevice(*device);
     programmer.setProtectedWrite(o.protectedWrite);
     const FirmwareInfo info = programmer.connect();
-    std::cout << "Chip: " << device->name << " (" << device->size << " bytes)\n";
+
+    // Identificação: independe do chip selecionado (-d).
+    if (o.operation == "identify") {
+        const Identification id = programmer.identify();
+        if (!id.suggestion) return kExitError;
+        std::cout << "Para usar este chip: -d \"" << id.suggestion->name << "\"\n";
+        return kExitOk;
+    }
+
+    std::cout << "Chip selecionado: " << device->name << " (" << device->size << " bytes)\n";
 
     // --- Operações com o gravador ----------------------------------------
     if (o.operation == "info") {

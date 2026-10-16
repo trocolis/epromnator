@@ -32,6 +32,7 @@ TEST_F(ProtocolClientTest, HandshakeReadsFirmwareInfo) {
     EXPECT_EQ(info.maxReadChunk, EPN_MAX_READ_CHUNK);
     EXPECT_EQ(info.maxWriteChunk, EPN_MAX_WRITE_CHUNK);
     EXPECT_TRUE(info.capabilities & EPN_CAP_SDP);
+    EXPECT_TRUE(info.capabilities & EPN_CAP_IDENTIFY);
     EXPECT_NE(info.name.find("EPROMnator"), std::string::npos);
 }
 
@@ -124,4 +125,22 @@ TEST_F(ProtocolClientTest, ConfigRejectsInvalidValues) {
     ChipConfig config;
     config.size = 1u << 20;  // 1 MB: impossível com 16 linhas de endereço
     EXPECT_THROW(client.configure(config), DeviceError);
+}
+
+TEST_F(ProtocolClientTest, IdentifyReportsEeprom) {
+    const ChipIdentity id = client.identify();
+    EXPECT_EQ(id.kind, EPN_CHIP_EEPROM);
+    EXPECT_EQ(id.size, 32768u);
+    EXPECT_GT(id.writeTimeUs, 0u);
+
+    emu.setSdpEnabled(true);
+    EXPECT_EQ(client.identify().kind, EPN_CHIP_EEPROM_SDP);
+}
+
+TEST_F(ProtocolClientTest, IdentifyReportsSram) {
+    emu.setChipType(ChipType::Sram);
+    const ChipIdentity id = client.identify();
+    EXPECT_EQ(id.kind, EPN_CHIP_SRAM);
+    EXPECT_EQ(id.size, 32768u);
+    EXPECT_EQ(id.writeTimeUs, 0u);
 }

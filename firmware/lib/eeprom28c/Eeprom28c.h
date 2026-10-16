@@ -106,4 +106,32 @@ bool isBlank(uint16_t address, uint32_t count, uint16_t* firstUsed = nullptr,
 // Calcula o CRC32 (IEEE 802.3, o mesmo do zip) dos bytes da faixa.
 uint32_t crc32(uint16_t address, uint32_t count);
 
+// ---------------------------------------------------------------------------
+//  Identificação do chip
+// ---------------------------------------------------------------------------
+
+// Resultado de identify(). `kind` usa os códigos EPN_CHIP_* do protocolo.
+struct Identity {
+    uint8_t  kind;         // EPN_CHIP_*
+    uint32_t size;         // 8192, 32768 ou 65536 (0 = desconhecido)
+    uint32_t writeTimeUs;  // duração medida do ciclo de gravação (EEPROM)
+};
+
+// Descobre o tipo e o tamanho do chip no soquete, independentemente da
+// configuração atual:
+//
+//  * soquete vazio: lido com o barramento pré-carregado em 0x00 e em 0xFF,
+//    o byte muda (as linhas flutuam);
+//  * SRAM: o byte gravado aparece na hora e continua lá;
+//  * EEPROM: o data polling mostra o ciclo de gravação (alguns ms); se a
+//    escrita simples é ignorada, tenta a escrita protegida (SDP ativo);
+//  * tamanho: grava em 0x2000 e 0x8000 e observa se o byte aparece em 0x0000
+//    (espelhamento por falta das linhas A13 ou A15).
+//
+// Grava no máximo 6 bytes e restaura todos. As gravações de teste não
+// levam A14 a nível alto, porque no 28C64 o pino 1 é RDY/~BUSY (ver
+// addressMask() em Eeprom28c.cpp). A exceção é a escrita protegida em
+// 5555/2AAA, tentada só depois que a sequência do 28C64 (1555/0AAA) falhou.
+Identity identify();
+
 }  // namespace Eeprom

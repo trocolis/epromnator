@@ -109,7 +109,12 @@ typedef enum {
 
     /* Proteção de dados por software (sem payload). */
     EPN_CMD_SDP_ENABLE  = 0x20,
-    EPN_CMD_SDP_DISABLE = 0x21
+    EPN_CMD_SDP_DISABLE = 0x21,
+
+    /* IDENTIFY (sem payload): descobre o tipo e o tamanho do chip no
+     * soquete gravando temporariamente alguns bytes (sempre restaurados).
+     * → payload: ver EPN_IDENTIFY_*. Requer EPN_CAP_IDENTIFY. */
+    EPN_CMD_IDENTIFY = 0x30
 } epn_command_t;
 
 /* ---------------------------------------------------------------------------
@@ -142,6 +147,7 @@ typedef enum {
 /* Capacidades do hardware/firmware. */
 #define EPN_CAP_SDP        0x01 /* suporta comandos SDP */
 #define EPN_CAP_PAGE_WRITE 0x02 /* suporta escrita em modo página */
+#define EPN_CAP_IDENTIFY   0x04 /* suporta o comando IDENTIFY */
 
 /* ---------------------------------------------------------------------------
  *  Payload de CONFIG (offsets em bytes)
@@ -154,6 +160,21 @@ typedef enum {
 
 /* Precede cada ciclo de gravação com a sequência SDP (AA/55/A0). */
 #define EPN_CFG_PROTECTED_WRITE 0x01
+
+/* ---------------------------------------------------------------------------
+ *  Payload da resposta de IDENTIFY (offsets em bytes)
+ * ------------------------------------------------------------------------- */
+#define EPN_IDENTIFY_KIND        0 /* u8:  EPN_CHIP_* */
+#define EPN_IDENTIFY_SIZE        1 /* u32: capacidade detectada (0 = desconhecida) */
+#define EPN_IDENTIFY_WRITE_US    5 /* u32: ciclo de gravação medido (EEPROM) */
+#define EPN_IDENTIFY_PAYLOAD_LEN 9
+
+/* Tipos de chip reconhecidos por IDENTIFY. */
+#define EPN_CHIP_NONE       0 /* barramento flutuando: soquete vazio */
+#define EPN_CHIP_SRAM       1 /* escrita imediata, sem ciclo de gravação */
+#define EPN_CHIP_EEPROM     2 /* escrita com ciclo de gravação (data polling) */
+#define EPN_CHIP_EEPROM_SDP 3 /* EEPROM que só aceitou a escrita protegida */
+#define EPN_CHIP_READ_ONLY  4 /* responde à leitura mas ignora escritas */
 
 /* ---------------------------------------------------------------------------
  *  Funções auxiliares: inteiros little-endian
